@@ -1,21 +1,20 @@
-import { GoogleGenerativeAI } from '@google/generative-ai';
+import { optimizeImage } from './utils.js';
 
-let genAI = null;
-let model = null;
+let initialized = false;
 
 /**
- * Initialize the Gemini client with the provided API key.
+ * Initialize the Gemini client.
+ * Using hardcoded Vertex AI REST URL instead of SDK.
  */
 export function initGemini(apiKey) {
-  genAI = new GoogleGenerativeAI(apiKey);
-  model = genAI.getGenerativeModel({ model: 'gemini-2.0-flash' });
+  initialized = true;
 }
 
 /**
  * Check if Gemini is initialized.
  */
 export function isInitialized() {
-  return model !== null;
+  return initialized;
 }
 
 /**
@@ -131,7 +130,7 @@ Return your analysis as a JSON object with EXACTLY this structure (no markdown, 
  * @returns {Promise<object>} Structured medical profile
  */
 export async function parseDocuments(files, textInput, voiceTranscript, onStatus) {
-  if (!model) throw new Error('Gemini not initialized. Please enter your API key.');
+  if (!initialized) throw new Error('Gemini not initialized.');
 
   onStatus?.('Preparing documents for analysis...');
 
@@ -145,7 +144,11 @@ export async function parseDocuments(files, textInput, voiceTranscript, onStatus
   if (files && files.length > 0) {
     onStatus?.(`Processing ${files.length} document(s)...`);
     for (const file of files) {
-      if (file.type.startsWith('image/') || file.type === 'application/pdf') {
+      if (file.type.startsWith('image/')) {
+        const optimized = await optimizeImage(file);
+        const part = await fileToGenerativePart(optimized);
+        parts.push(part);
+      } else if (file.type === 'application/pdf') {
         const part = await fileToGenerativePart(file);
         parts.push(part);
       } else if (file.type === 'text/plain') {
@@ -157,9 +160,42 @@ export async function parseDocuments(files, textInput, voiceTranscript, onStatus
 
   onStatus?.('Analyzing with Gemini AI...');
 
-  const result = await model.generateContent(parts);
-  const response = await result.response;
-  let text = response.text();
+  const apiKey = import.meta.env.VITE_GEMINI_API_KEY || "YOUR_GEMINI_API_KEY";
+  const REST_URL = `https://aiplatform.googleapis.com/v1/publishers/google/models/gemini-2.5-flash-lite:streamGenerateContent?key=${apiKey}`;
+  
+  const payload = {
+    contents: [
+      {
+        role: "user",
+        parts: parts
+      }
+    ]
+  };
+
+  const response = await fetch(REST_URL, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload)
+  });
+
+  if (!response.ok) {
+    throw new Error(`Gemini API Error: ${response.status} ${response.statusText}`);
+  }
+
+  // streamGenerateContent returns an array of chunks
+  const jsonResponse = await response.json();
+  
+  let text = '';
+  if (Array.isArray(jsonResponse)) {
+    for (const chunk of jsonResponse) {
+      if (chunk.candidates?.[0]?.content?.parts?.[0]?.text) {
+        text += chunk.candidates[0].content.parts[0].text;
+      }
+    }
+  } else {
+    // Fallback if not stream format
+    text = jsonResponse.candidates?.[0]?.content?.parts?.[0]?.text || '';
+  }
 
   onStatus?.('Structuring medical profile...');
 

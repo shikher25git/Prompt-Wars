@@ -1,4 +1,5 @@
 import { initGemini, isInitialized, parseDocuments } from './gemini.js';
+import { signInWithGoogle, signOutUser, subscribeToAuthChanges, saveMedicalProfile, getMedicalProfiles } from './firebase.js';
 
 // ===== DOM Elements =====
 const settingsToggle = document.getElementById('settings-toggle');
@@ -21,45 +22,90 @@ const resultsSection = document.getElementById('results-section');
 const resetBtn = document.getElementById('reset-btn');
 
 // ===== State =====
+let currentUser = null;
 let uploadedFiles = [];
 let transcript = '';
 let recognition = null;
 
-// ===== API Key Management =====
-function loadApiKey() {
-  const saved = localStorage.getItem('medstack_api_key');
-  if (saved) {
-    apiKeyInput.value = saved;
-    initGemini(saved);
-    updateProcessButton();
+// ===== Auth Management =====
+const loginSection = document.getElementById('login-section');
+const appMain = document.getElementById('app-main');
+const googleLoginBtn = document.getElementById('google-login-btn');
+const userProfile = document.getElementById('user-profile');
+const userAvatar = document.getElementById('user-avatar');
+const userName = document.getElementById('user-name');
+const signOutBtn = document.getElementById('sign-out-btn');
+
+googleLoginBtn.addEventListener('click', async () => {
+  try {
+    await signInWithGoogle();
+  } catch (err) {
+    showApiStatus('Failed to sign in. Please try again.', 'error');
   }
+});
+
+signOutBtn.addEventListener('click', async () => {
+  await signOutUser();
+});
+
+subscribeToAuthChanges((user) => {
+  currentUser = user;
+  if (user) {
+    // Logged in
+    if(loginSection) loginSection.classList.add('hidden');
+    if(appMain) appMain.classList.remove('hidden');
+    if(userProfile) userProfile.classList.remove('hidden');
+    if(userAvatar) userAvatar.src = user.photoURL || '';
+    if(userName) userName.textContent = (user.displayName || user.email).split(' ')[0];
+    loadMedicalHistory();
+  } else {
+    // Logged out
+    if(loginSection) loginSection.classList.remove('hidden');
+    if(appMain) appMain.classList.add('hidden');
+    if(userProfile) userProfile.classList.add('hidden');
+  }
+});
+
+async function loadMedicalHistory() {
+  if (!currentUser) return;
+  try {
+    const profiles = await getMedicalProfiles(currentUser.uid);
+    // For Hackathon prototype, just render the latest analysis if exists
+    if (profiles.length > 0) {
+      // Small timeout to skip some DOM race conditions if any
+      setTimeout(() => {
+        renderResults(profiles[0].data);
+        if(resultsSection) resultsSection.classList.remove('hidden');
+        if(inputSection) inputSection.classList.add('hidden');
+      }, 50);
+    }
+  } catch (err) {
+    console.error("Failed to load history", err);
+  }
+}
+
+// Bypass auth for localhost testing (Disabled since real keys are in .env)
+// if (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') {
+//   currentUser = { uid: 'demo-local-uid', displayName: 'Local' };
+//   // if(loginSection) loginSection.classList.add('hidden');
+//   // if(appMain) appMain.classList.remove('hidden');
+//   if(userProfile) userProfile.classList.add('hidden');
+// }
+
+// ===== API Key Management =====
+// Disabled: Key is currently hardcoded in the REST implementation
+function loadApiKey() {
+  initGemini('vertex-rest');
+  updateProcessButton();
 }
 
 settingsToggle.addEventListener('click', () => {
   apiPanel.classList.toggle('hidden');
 });
 
-apiKeySave.addEventListener('click', () => {
-  const key = apiKeyInput.value.trim();
-  if (!key) {
-    showApiStatus('Please enter an API key.', 'error');
-    return;
-  }
-  localStorage.setItem('medstack_api_key', key);
-  initGemini(key);
-  showApiStatus('✓ API key saved and ready!', 'success');
-  updateProcessButton();
-  setTimeout(() => apiPanel.classList.add('hidden'), 3000);
-});
-
-apiKeyInput.addEventListener('keydown', (e) => {
-  if (e.key === 'Enter') apiKeySave.click();
-});
-
-function showApiStatus(msg, type) {
-  apiStatus.textContent = msg;
-  apiStatus.className = 'api-status ' + type;
-}
+// apiKeySave.addEventListener('click', ... removed);
+// apiKeyInput.addEventListener('keydown', ... removed);
+// function showApiStatus(...) removed;
 
 // ===== File Upload =====
 dropZone.addEventListener('dragover', (e) => {
@@ -226,6 +272,12 @@ processBtn.addEventListener('click', async () => {
         loadingStatus.textContent = status;
       }
     );
+
+    // Save to Firestore if authenticated
+    if (currentUser) {
+      if(loadingStatus) loadingStatus.textContent = 'Saving profile securely...';
+      await saveMedicalProfile(currentUser.uid, result);
+    }
 
     renderResults(result);
     loadingSection.classList.add('hidden');
