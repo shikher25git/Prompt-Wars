@@ -1,0 +1,221 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>MedStack — Instant Medical History Unifier</title>
+  <meta name="description" content="Upload messy medical documents and get a structured, verified medical profile with drug interaction alerts — powered by Gemini AI." />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="/style.css" />
+</head>
+<body>
+  <!-- Ambient background glow -->
+  <div class="ambient-glow"></div>
+
+  <!-- Header -->
+  <header id="app-header">
+    <div class="header-content">
+      <div class="logo">
+        <div class="logo-icon">
+          <svg viewBox="0 0 32 32" fill="none">
+            <rect x="4" y="2" width="24" height="28" rx="3" stroke="currentColor" stroke-width="2"/>
+            <path d="M10 10h12M10 15h12M10 20h8" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+            <circle cx="24" cy="24" r="7" fill="#0a0f1c" stroke="#00d4aa" stroke-width="2"/>
+            <path d="M24 21v6M21 24h6" stroke="#00d4aa" stroke-width="2" stroke-linecap="round"/>
+          </svg>
+        </div>
+        <div>
+          <h1>MedStack</h1>
+          <p class="tagline">Instant Medical History Unifier</p>
+        </div>
+      </div>
+      <button id="settings-toggle" class="icon-btn" title="API Settings">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
+          <circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 00.33 1.82l.06.06a2 2 0 010 2.83 2 2 0 01-2.83 0l-.06-.06a1.65 1.65 0 00-1.82-.33 1.65 1.65 0 00-1 1.51V21a2 2 0 01-4 0v-.09A1.65 1.65 0 009 19.4a1.65 1.65 0 00-1.82.33l-.06.06a2 2 0 01-2.83-2.83l.06-.06A1.65 1.65 0 004.68 15a1.65 1.65 0 00-1.51-1H3a2 2 0 010-4h.09A1.65 1.65 0 004.6 9a1.65 1.65 0 00-.33-1.82l-.06-.06a2 2 0 012.83-2.83l.06.06A1.65 1.65 0 009 4.68a1.65 1.65 0 001-1.51V3a2 2 0 014 0v.09a1.65 1.65 0 001 1.51 1.65 1.65 0 001.82-.33l.06-.06a2 2 0 012.83 2.83l-.06.06A1.65 1.65 0 0019.4 9a1.65 1.65 0 001.51 1H21a2 2 0 010 4h-.09a1.65 1.65 0 00-1.51 1z"/>
+        </svg>
+      </button>
+    </div>
+
+    <!-- API Key Panel -->
+    <div id="api-panel" class="api-panel hidden">
+      <div class="api-panel-inner">
+        <label for="api-key-input">Gemini API Key</label>
+        <div class="api-input-row">
+          <input type="password" id="api-key-input" placeholder="Enter your Gemini API key..." autocomplete="off" />
+          <button id="api-key-save" class="btn btn-sm">Save</button>
+        </div>
+        <p class="api-hint">Your key stays in your browser. Never sent to any server except Google's Gemini API.</p>
+        <div id="api-status" class="api-status"></div>
+      </div>
+    </div>
+  </header>
+
+  <!-- Main Content -->
+  <main id="app-main">
+    <!-- Input Section -->
+    <section id="input-section" class="section">
+      <h2 class="section-title">
+        <span class="section-icon">📄</span>
+        Upload Medical Documents
+      </h2>
+      <p class="section-desc">Drop photos of prescriptions, lab reports, pill bottles, insurance cards, or any medical documents. You can also type or speak your medical history.</p>
+
+      <!-- Drop Zone -->
+      <div id="drop-zone" class="drop-zone">
+        <div class="drop-zone-content">
+          <div class="drop-icon">
+            <svg viewBox="0 0 48 48" fill="none">
+              <rect x="6" y="8" width="36" height="32" rx="4" stroke="currentColor" stroke-width="2" stroke-dasharray="4 3"/>
+              <path d="M24 18v12M18 24h12" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+            </svg>
+          </div>
+          <p class="drop-text">Drag & drop files here</p>
+          <p class="drop-hint">or click to browse • Images, PDFs, text files</p>
+        </div>
+        <input type="file" id="file-input" multiple accept="image/*,.pdf,.txt,.doc,.docx" />
+      </div>
+
+      <!-- Uploaded files preview -->
+      <div id="file-preview" class="file-preview hidden"></div>
+
+      <!-- Voice + Text inputs -->
+      <div class="input-extras">
+        <div class="voice-section">
+          <button id="voice-btn" class="btn btn-outline btn-voice">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
+              <path d="M12 1a3 3 0 00-3 3v8a3 3 0 006 0V4a3 3 0 00-3-3z"/>
+              <path d="M19 10v2a7 7 0 01-14 0v-2"/>
+              <line x1="12" y1="19" x2="12" y2="23"/>
+              <line x1="8" y1="23" x2="16" y2="23"/>
+            </svg>
+            <span>Voice Input</span>
+          </button>
+          <div id="voice-status" class="voice-status hidden">
+            <div class="recording-pulse"></div>
+            <span>Listening...</span>
+          </div>
+          <div id="voice-transcript" class="voice-transcript hidden"></div>
+        </div>
+
+        <div class="text-section">
+          <label for="text-input">Additional Notes</label>
+          <textarea id="text-input" placeholder="Type any additional medical information, current symptoms, or context here...&#10;&#10;Example: 'I've been taking Metformin 500mg twice daily for Type 2 diabetes since 2019. Also on Lisinopril 10mg for blood pressure. Allergic to penicillin.'"></textarea>
+        </div>
+      </div>
+
+      <!-- Process Button -->
+      <button id="process-btn" class="btn btn-primary btn-lg" disabled>
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
+          <polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/>
+        </svg>
+        <span>Analyze with Gemini</span>
+      </button>
+    </section>
+
+    <!-- Loading State -->
+    <section id="loading-section" class="section hidden">
+      <div class="loading-container">
+        <div class="loading-dna">
+          <div class="dna-strand"></div>
+          <div class="dna-strand"></div>
+          <div class="dna-strand"></div>
+        </div>
+        <h2 class="loading-text">Analyzing your documents...</h2>
+        <p class="loading-sub" id="loading-status">Parsing medical records with Gemini AI</p>
+      </div>
+    </section>
+
+    <!-- Results Section -->
+    <section id="results-section" class="section hidden">
+      <div class="results-header">
+        <h2 class="section-title">
+          <span class="section-icon">✅</span>
+          Structured Medical Profile
+        </h2>
+        <button id="reset-btn" class="btn btn-outline btn-sm">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
+            <polyline points="1 4 1 10 7 10"/>
+            <path d="M3.51 15a9 9 0 102.13-9.36L1 10"/>
+          </svg>
+          New Analysis
+        </button>
+      </div>
+
+      <!-- Drug Interaction Alerts -->
+      <div id="alerts-container" class="alerts-container hidden"></div>
+
+      <!-- ER Summary Card -->
+      <div id="er-summary" class="er-summary-card hidden">
+        <div class="er-badge">🚑 30-Second ER Summary</div>
+        <div id="er-summary-content" class="er-content"></div>
+      </div>
+
+      <!-- Profile Grid -->
+      <div id="profile-grid" class="profile-grid">
+        <!-- Patient Info -->
+        <div class="profile-card" id="card-patient">
+          <div class="card-header">
+            <span class="card-icon">👤</span>
+            <h3>Patient Info</h3>
+          </div>
+          <div class="card-body" id="patient-info"></div>
+        </div>
+
+        <!-- Conditions -->
+        <div class="profile-card" id="card-conditions">
+          <div class="card-header">
+            <span class="card-icon">🩺</span>
+            <h3>Conditions</h3>
+          </div>
+          <div class="card-body" id="conditions-list"></div>
+        </div>
+
+        <!-- Medications -->
+        <div class="profile-card" id="card-medications">
+          <div class="card-header">
+            <span class="card-icon">💊</span>
+            <h3>Medications</h3>
+          </div>
+          <div class="card-body" id="medications-list"></div>
+        </div>
+
+        <!-- Allergies -->
+        <div class="profile-card" id="card-allergies">
+          <div class="card-header">
+            <span class="card-icon">⚠️</span>
+            <h3>Allergies</h3>
+          </div>
+          <div class="card-body" id="allergies-list"></div>
+        </div>
+
+        <!-- Lab Results -->
+        <div class="profile-card card-wide" id="card-labs">
+          <div class="card-header">
+            <span class="card-icon">🔬</span>
+            <h3>Lab Results</h3>
+          </div>
+          <div class="card-body" id="labs-list"></div>
+        </div>
+
+        <!-- Procedures -->
+        <div class="profile-card" id="card-procedures">
+          <div class="card-header">
+            <span class="card-icon">🏥</span>
+            <h3>Procedures & Surgeries</h3>
+          </div>
+          <div class="card-body" id="procedures-list"></div>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <!-- Footer -->
+  <footer>
+    <p>MedStack — Powered by Google Gemini AI • For demonstration purposes only</p>
+  </footer>
+
+  <script type="module" src="/src/app.js"></script>
+</body>
+</html>
